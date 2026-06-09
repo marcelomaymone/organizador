@@ -1,0 +1,36 @@
+[project]
+name = "motor-python"
+version = "0.1.0"
+description = "Motor de inventario e processamento do Organizador Pro"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "xxhash>=3.4.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.3.0",
+    "bandit>=1.7.8",
+    "sqlfluff>=3.0.0",
+    "pre-commit>=3.6.0",
+    "pytest>=8.0.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C90", # mccabe complexity
+    "UP",  # pyupgrade
+]
+ignore = []
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10

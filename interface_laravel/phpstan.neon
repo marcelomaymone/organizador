@@ -1,0 +1,9 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/
+    
+    # Nivel 5 e o recomendado para integracao estrita sem overhead excessivo no inicio
+    level: 5

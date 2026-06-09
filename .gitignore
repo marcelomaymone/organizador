@@ -1,0 +1,43 @@
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python caching and build files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+*.spec
+
+# Database
+banco_dados/database.sqlite
+banco_dados/database.sqlite-journal
+database.sqlite
+database.sqlite-journal
+
+# Environment variables (Laravel & Python)
+.env
+.env.local
+.env.production
+.env.development
+.env.staging
+
+# PHP / Laravel dependencies & caches
+interface_laravel/vendor/
+interface_laravel/node_modules/
+interface_laravel/public/storage
+interface_laravel/storage/*.key
+interface_laravel/bootstrap/cache/*
+interface_laravel/.env
+
+# Temporary files and logs
+*.log
+tmp/
+temp/
