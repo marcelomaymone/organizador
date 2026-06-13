@@ -47,6 +47,16 @@ if exist "%MOTOR_EXE%" (
 
 set "LARAVEL_DIR=%RAIZ_DIR%\interface_laravel"
 
+rem ---- Inicializacao e Ajuste do Ambiente ----
+rem Executa o script PHP para preparar e configurar todos os arquivos .env
+rem de forma portatil, lidando com espacos em caminhos de arquivos.
+if exist "%RAIZ_DIR%\configurar_ambiente.php" (
+    "%PHP_CMD%" "%RAIZ_DIR%\configurar_ambiente.php"
+) else (
+    echo [AVISO] configurar_ambiente.php nao encontrado. Iniciando sem correcao de ambiente.
+)
+
+
 if "%1"=="" goto run_app
 if "%1"=="--help" goto help
 if "%1"=="-h" goto help

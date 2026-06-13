@@ -6,18 +6,25 @@ import sys
 def obter_diretorio_base() -> str:
     """Retorna a pasta raiz do projeto de forma robusta, suportando o PyInstaller (congelado).
 
-    Busca o arquivo .env a partir da raiz de execucao para situar a portabilidade do motor.
+    Estratégia de busca quando compilado (frozen):
+    - Nível 0: dist/motor_organizador/ (diretório do .exe)
+    - Nível 1: dist/
+    - Nível 2: <raiz_do_pacote>/  ← estrutura padrão gerada pelo PyInstaller
+    Percorre até 3 níveis acima procurando o arquivo .env que ancora a raiz portátil.
+    Cria automaticamente a pasta banco_dados caso não exista para facilitar a primeira execução.
     """
     if getattr(sys, "frozen", False):
         dir_exec = os.path.dirname(sys.executable)
-        # Se houver .env no proprio diretorio do binario (copia portátil autônoma)
-        if os.path.exists(os.path.join(dir_exec, ".env")):
-            return dir_exec
-        # Se estiver na pasta de dist/motor_organizador/ executando pelo start.bat na raiz
-        dir_pai = os.path.dirname(dir_exec)
-        dir_avo = os.path.dirname(dir_pai)
-        if os.path.exists(os.path.join(dir_avo, ".env")):
-            return dir_avo
+        # Percorre até 3 níveis acima em busca do .env que ancora a raiz portátil
+        candidato = dir_exec
+        for _ in range(3):
+            if os.path.exists(os.path.join(candidato, ".env")):
+                return candidato
+            pai = os.path.dirname(candidato)
+            if pai == candidato:  # Chegou na raiz do sistema de arquivos
+                break
+            candidato = pai
+        # Fallback: retorna o diretório do executável
         return dir_exec
     else:
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -175,9 +182,15 @@ def main() -> None:
         print(f"Diretório de Destino:  {dest_path}")
     print("----------------------------------------------------")
 
-    if not os.path.exists(os.path.dirname(db_path)):
-        print(f"ERRO: A pasta do banco de dados '{os.path.dirname(db_path)}' nao existe.")
-        sys.exit(1)
+    pasta_db = os.path.dirname(db_path)
+    if not os.path.exists(pasta_db):
+        # Cria a pasta automaticamente para garantir funcionamento na primeira execução portátil
+        try:
+            os.makedirs(pasta_db, exist_ok=True)
+            print(f"[+] Pasta do banco de dados criada automaticamente: {pasta_db}")
+        except OSError as e:
+            print(f"ERRO: Nao foi possivel criar a pasta do banco de dados '{pasta_db}': {e}")
+            sys.exit(1)
 
     acao_executada = False
 
