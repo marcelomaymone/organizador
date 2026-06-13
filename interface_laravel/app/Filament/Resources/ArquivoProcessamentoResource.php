@@ -216,7 +216,7 @@ class ArquivoProcessamentoResource extends Resource
                     ->icon('heroicon-o-document-duplicate')
                     ->color('warning')
                     ->modalHeading('Gerenciar Duplicatas Lógicas')
-                    ->modalSubmitButton(false)
+                    ->modalSubmitAction(false)
                     ->modalContent(fn ($record) => view('filament.resources.arquivo-processamento.duplicados-modal', [
                         'record' => $record,
                         'duplicados' => $record->obterDuplicados(),

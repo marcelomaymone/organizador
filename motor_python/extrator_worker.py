@@ -2,12 +2,14 @@ import os
 import shutil
 import sqlite3
 import traceback
-from typing import List, Dict, Any
+from typing import Any
+
 from extractors import ExtractorRegistry
+
 
 class ExtractWorker:
     """Worker responsavel por ler a fila do SQLite, extrair texto dos arquivos e gerenciar quarentenas."""
-    
+
     BATCH_SIZE = 100  # Commit em lote a cada 100 registros
 
     def __init__(self, db_path: str, destination_path: str):
@@ -30,14 +32,14 @@ class ExtractWorker:
         """Executa o processamento de toda a fila pendente de extracao."""
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
-        
+
         # 1. Busca os arquivos pendentes
         cursor = conn.cursor()
         try:
             cursor.execute(
                 """
-                SELECT uuid, caminho_origem, nome_original 
-                FROM arquivos_processamento 
+                SELECT uuid, caminho_origem, nome_original
+                FROM arquivos_processamento
                 WHERE status = 'pendente_extracao' AND eh_duplicado = 0
                 """
             )
@@ -54,10 +56,10 @@ class ExtractWorker:
         for row in rows:
             uuid_val = row['uuid']
             caminho_origem = row['caminho_origem']
-            nome_original = row['nome_original']
-            
+            row['nome_original']
+
             ext = os.path.splitext(caminho_origem)[1].lower()
-            
+
             # Inicializa valores de atualizacao padrao
             record = {
                 'uuid': uuid_val,
@@ -71,9 +73,9 @@ class ExtractWorker:
             if not os.path.exists(caminho_origem):
                 # O arquivo sumiu fisicamente do local original
                 self._move_to_quarantine_logical(
-                    record, 
-                    caminho_origem, 
-                    "Arquivo de origem nao existe mais no disco físico.", 
+                    record,
+                    caminho_origem,
+                    "Arquivo de origem nao existe mais no disco físico.",
                     "FileNotFoundError"
                 )
             elif ext not in ExtractorRegistry:
@@ -89,7 +91,7 @@ class ExtractWorker:
                     extractor_cls = ExtractorRegistry[ext]
                     extractor = extractor_cls()
                     texto = extractor.extract(caminho_origem)
-                    
+
                     record['texto_extraido'] = texto
                     record['justificativa_classificacao'] = None
                     record['status'] = 'pendente_inferencia'
@@ -113,9 +115,9 @@ class ExtractWorker:
 
         return processed_count
 
-    def _execute_physical_quarantine(self, record: Dict[str, Any], caminho_origem: str, motivo: str, tb: str) -> None:
+    def _execute_physical_quarantine(self, record: dict[str, Any], caminho_origem: str, motivo: str, tb: str) -> None:
         """Move o arquivo para a pasta _QUARENTENA_ e atualiza o record de estado.
-        
+
         Usa a Opcao B: preserva a estrutura de drives/caminhos completos do SO dentro da quarentena.
         """
         try:
@@ -123,40 +125,40 @@ class ExtractWorker:
             drive, resto = os.path.splitdrive(caminho_origem)
             drive_limpo = drive.replace(":", "_").strip("\\/")
             resto_limpo = resto.lstrip("\\/")
-            
+
             caminho_quarentena = os.path.join(
-                self.destination_path, 
-                "_QUARENTENA_", 
-                drive_limpo, 
+                self.destination_path,
+                "_QUARENTENA_",
+                drive_limpo,
                 resto_limpo
             )
-            
+
             # Ajuste de caminhos longos no Windows (MAX_PATH limit bypass)
             origem_ajustada = caminho_origem
             quarentena_ajustada = caminho_quarentena
             if os.name == 'nt' and len(caminho_quarentena) > 240:
                 origem_ajustada = "\\\\?\\" + os.path.abspath(caminho_origem)
                 quarentena_ajustada = "\\\\?\\" + os.path.abspath(caminho_quarentena)
-            
+
             # Cria a pasta de destino correspondente
             os.makedirs(os.path.dirname(quarentena_ajustada), exist_ok=True)
-            
+
             # Remove colisoes se ja houver um arquivo no destino de quarentena
             if os.path.exists(quarentena_ajustada):
                 try:
                     os.remove(quarentena_ajustada)
                 except Exception:
                     pass
-            
+
             # Move o arquivo fisicamente
             shutil.move(origem_ajustada, quarentena_ajustada)
-            
+
             # Atualiza metadados do banco
             record['status'] = 'quarentena'
             record['motivo_falha'] = motivo
             record['mensagem_erro'] = tb
             record['novo_caminho'] = caminho_quarentena
-            
+
         except Exception as q_error:
             # Se a movimentacao fisica falhar de vez, marcamos como erro critico do pipeline
             record['status'] = 'erro'
@@ -164,14 +166,14 @@ class ExtractWorker:
             record['mensagem_erro'] = f"Erro original:\n{tb}\n\nErro da Quarentena:\n{traceback.format_exc()}"
             record['novo_caminho'] = caminho_origem
 
-    def _move_to_quarantine_logical(self, record: Dict[str, Any], caminho_origem: str, motivo: str, tb: str) -> None:
+    def _move_to_quarantine_logical(self, record: dict[str, Any], caminho_origem: str, motivo: str, tb: str) -> None:
         """Marca o arquivo lógicamente em quarentena sem movimentação fisica (utilizado para arquivos deletados)."""
         record['status'] = 'quarentena'
         record['motivo_falha'] = motivo
         record['mensagem_erro'] = tb
         record['novo_caminho'] = caminho_origem
 
-    def _persist_batch(self, records: List[Dict[str, Any]]) -> None:
+    def _persist_batch(self, records: list[dict[str, Any]]) -> None:
         """Grava as atualizacoes no banco SQLite usando transacoes em lote."""
         sql = """
         UPDATE arquivos_processamento
@@ -183,7 +185,7 @@ class ExtractWorker:
             justificativa_classificacao = COALESCE(:justificativa_classificacao, justificativa_classificacao)
         WHERE uuid = :uuid
         """
-        
+
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         try:
             conn.execute("BEGIN TRANSACTION;")
@@ -195,6 +197,6 @@ class ExtractWorker:
             conn.commit()
         except Exception as e:
             conn.rollback()
-            raise IOError(f"Falha ao persistir lote de extracao no banco SQLite: {e}")
+            raise OSError(f"Falha ao persistir lote de extracao no banco SQLite: {e}")
         finally:
             conn.close()

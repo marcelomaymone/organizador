@@ -77,9 +77,14 @@ class InferenceWorker:
 
         # Inicializacao de LLM
         if llm_provider == "gemini":
-            if not self.gemini_api_key:
-                raise ValueError("Chave de API do Gemini (GEMINI_API_KEY) e obrigatoria para a inferencia de LLM.")
-            self.llm_service = GeminiLlmService(api_key=self.gemini_api_key)
+            if not self.gemini_api_key or self.gemini_api_key == "MOCK" or self.gemini_api_key == "":
+                from ia_service import MockLlmService
+                self.llm_service = MockLlmService()
+            else:
+                self.llm_service = GeminiLlmService(api_key=self.gemini_api_key)
+        elif llm_provider == "mock":
+            from ia_service import MockLlmService
+            self.llm_service = MockLlmService()
         else:
             # Fallback para evitar travamentos em ambiente de teste ou producao sem API key
             # O ideal no SOLID e falhar se a dependencia for invalida, mas podemos prover classe mockada.

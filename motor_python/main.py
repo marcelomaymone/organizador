@@ -2,9 +2,25 @@ import argparse
 import os
 import sys
 
-from extrator_worker import ExtractWorker
-from inference_worker import InferenceWorker
-from inventario import InventoryWorker, SecurityError
+
+def obter_diretorio_base() -> str:
+    """Retorna a pasta raiz do projeto de forma robusta, suportando o PyInstaller (congelado).
+
+    Busca o arquivo .env a partir da raiz de execucao para situar a portabilidade do motor.
+    """
+    if getattr(sys, "frozen", False):
+        dir_exec = os.path.dirname(sys.executable)
+        # Se houver .env no proprio diretorio do binario (copia portátil autônoma)
+        if os.path.exists(os.path.join(dir_exec, ".env")):
+            return dir_exec
+        # Se estiver na pasta de dist/motor_organizador/ executando pelo start.bat na raiz
+        dir_pai = os.path.dirname(dir_exec)
+        dir_avo = os.path.dirname(dir_pai)
+        if os.path.exists(os.path.join(dir_avo, ".env")):
+            return dir_avo
+        return dir_exec
+    else:
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def carregar_env() -> None:
@@ -13,8 +29,7 @@ def carregar_env() -> None:
     Esta decisao de design evita dependencias de bibliotecas externas (como python-dotenv)
     e garante que o motor funcione de forma portatil no Windows 11.
     """
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # Procura na pasta do laravel primeiro (onde o painel cria) ou na raiz do projeto
+    base_dir = obter_diretorio_base()
     caminhos_candidatos = [os.path.join(base_dir, "interface_laravel", ".env"), os.path.join(base_dir, ".env")]
 
     for caminho in caminhos_candidatos:
@@ -35,6 +50,8 @@ def carregar_env() -> None:
 
 def executar_fase_scan(scan_dir: str, db_path: str) -> None:
     """Executa a Fase 1 (Scan) do motor Python de forma isolada."""
+    from inventario import InventoryWorker, SecurityError
+
     scan_dir_abs = os.path.abspath(scan_dir)
     if not os.path.exists(scan_dir_abs):
         print(f"ERRO: O diretorio de escaneamento '{scan_dir_abs}' nao existe.")
@@ -56,6 +73,8 @@ def executar_fase_scan(scan_dir: str, db_path: str) -> None:
 
 def executar_fase_extract(db_path: str, dest_path: str) -> None:
     """Executa a Fase 2 (Extração) do motor Python de forma isolada."""
+    from extrator_worker import ExtractWorker
+
     if not dest_path:
         print("ERRO: O caminho de destino e obrigatorio para processar a extracao (quarentena fisica).")
         sys.exit(1)
@@ -73,6 +92,8 @@ def executar_fase_extract(db_path: str, dest_path: str) -> None:
 
 def executar_fase_inference(db_path: str, dest_path: str) -> None:
     """Executa a Fase 3 (Inferência Semântica e CoT) do motor Python de forma isolada."""
+    from inference_worker import InferenceWorker
+
     if not dest_path:
         print("ERRO: O caminho de destino e obrigatorio para sugerir a árvore de pastas.")
         sys.exit(1)
@@ -99,6 +120,25 @@ def executar_fase_inference(db_path: str, dest_path: str) -> None:
         sys.exit(1)
 
 
+def executar_fase_move(db_path: str, dest_path: str, origin_path: str = None) -> None:
+    """Executa a Fase 5 (Movimentação Física e Teardown) do motor Python de forma isolada."""
+    from movement_worker import MovementWorker
+
+    if not dest_path:
+        print("ERRO: O caminho de destino e obrigatorio para movimentar os arquivos.")
+        sys.exit(1)
+
+    print("Iniciando Fase 5 (Movimentação Física e Teardown) ...")
+    try:
+        worker = MovementWorker(db_path, dest_path, origin_path)
+        total_movimentados = worker.execute()
+        print("Fase 5 concluida com sucesso!")
+        print(f"Total de arquivos processados na movimentação/descarte: {total_movimentados}")
+    except Exception as e:
+        print(f"ERRO NA FASE 5: {e}")
+        sys.exit(1)
+
+
 def main() -> None:
     """Funcao de entrada que inicializa a orquestracao do motor Python."""
     carregar_env()
@@ -107,19 +147,20 @@ def main() -> None:
     parser.add_argument("--scan", type=str, default=None, help="Diretorio de origem a ser escaneado (Fase 1)")
     parser.add_argument("--extract", action="store_true", help="Processa a extração de texto em lote (Fase 2)")
     parser.add_argument("--inference", action="store_true", help="Processa a inferência semântica e CoT (Fase 3)")
+    parser.add_argument("--move", action="store_true", help="Processa a movimentação física de arquivos aprovados e descartes (Fase 5)")
     parser.add_argument("--db", type=str, default=None, help="Caminho customizado para o banco de dados SQLite")
     parser.add_argument("--destination", type=str, default=None, help="Diretorio de destino dos arquivos processados")
+    parser.add_argument("--origin", type=str, default=None, help="Diretorio de origem monitorado (usado para teardown de pastas vazias)")
 
     args = parser.parse_args()
 
     # Resolucao de banco de dados
     if args.db is None:
         db_env = os.environ.get("DB_DATABASE")
+        base_dir = obter_diretorio_base()
         if db_env:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             db_path = os.path.abspath(os.path.join(base_dir, db_env))
         else:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             db_path = os.path.join(base_dir, "banco_dados", "database.sqlite")
     else:
         db_path = os.path.abspath(args.db)
@@ -152,8 +193,14 @@ def main() -> None:
         acao_executada = True
         executar_fase_inference(db_path, dest_path)
 
+    if args.move:
+        acao_executada = True
+        # Mapeia a origem de forma automatica para o teardown recursivo
+        origem_candidata = args.scan or args.origin or os.environ.get("SCAN_PATH")
+        executar_fase_move(db_path, dest_path, origem_candidata)
+
     if not acao_executada:
-        print("Nenhuma ação especificada. Utilize --scan, --extract ou --inference.")
+        print("Nenhuma ação especificada. Utilize --scan, --extract, --inference ou --move.")
         parser.print_help()
 
 

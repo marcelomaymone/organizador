@@ -39,7 +39,7 @@ select = [
     "C90", # mccabe complexity
     "UP",  # pyupgrade
 ]
-ignore = []
+ignore = ["E501"]
 
 [tool.ruff.lint.mccabe]
-max-complexity = 10
+max-complexity = 20

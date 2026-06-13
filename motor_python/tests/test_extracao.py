@@ -1,20 +1,28 @@
 import os
-import shutil
 import sqlite3
 import zipfile
-import pytest
+
 import fitz
-from docx import Document
 import openpyxl
-from pptx import Presentation
-from odf.opendocument import OpenDocumentText, OpenDocumentSpreadsheet, OpenDocumentPresentation
-from odf.text import P
-from odf.table import Table, TableRow, TableCell
+import pytest
+from docx import Document
 from odf.draw import Frame
+from odf.opendocument import OpenDocumentPresentation, OpenDocumentSpreadsheet, OpenDocumentText
+from odf.table import Table, TableCell, TableRow
+from odf.text import P
+from pptx import Presentation
+
 from extractors import (
-    TxtExtractor, PdfExtractor, DocxExtractor, XlsxExtractor, 
-    PptxExtractor, OdtExtractor, OdsExtractor, OdpExtractor, 
-    RtfExtractor, MacExtractor, ExtractorRegistry
+    DocxExtractor,
+    MacExtractor,
+    OdpExtractor,
+    OdsExtractor,
+    OdtExtractor,
+    PdfExtractor,
+    PptxExtractor,
+    RtfExtractor,
+    TxtExtractor,
+    XlsxExtractor,
 )
 from extrator_worker import ExtractWorker
 
@@ -27,9 +35,9 @@ def temp_dirs(tmp_path):
     destino = tmp_path / "destino"
     origem.mkdir()
     destino.mkdir()
-    
+
     db_path = str(tmp_path / "teste_extracao.sqlite")
-    
+
     # Cria o banco de dados temporario com o schema completo
     conn = sqlite3.connect(db_path)
     try:
@@ -54,7 +62,7 @@ def temp_dirs(tmp_path):
         conn.commit()
     finally:
         conn.close()
-        
+
     return {
         'origem': origem,
         'destino': destino,
@@ -70,10 +78,10 @@ def test_txt_extractor(temp_dirs):
     filepath = os.path.join(temp_dirs['origem'], "texto.txt")
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("<h1>Olá Mundo!</h1> Esse é um teste de acentuação em português.")
-        
+
     extractor = TxtExtractor()
     texto = extractor.extract(filepath)
-    
+
     assert "Olá Mundo!" in texto
     assert "acentuação" in texto
     assert "<h1>" not in texto
@@ -85,44 +93,44 @@ def test_txt_extractor_truncation(temp_dirs):
     conteudo = "A" * 10000
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(conteudo)
-        
+
     extractor = TxtExtractor()
     texto = extractor.extract(filepath)
-    
+
     assert len(texto) == 8000
 
 
 def test_pdf_extractor(temp_dirs):
     """Valida a extracao de PDF gerando um documento PDF valido dinamicamente."""
     filepath = os.path.join(temp_dirs['origem'], "teste.pdf")
-    
+
     # Cria um PDF valido usando PyMuPDF
     doc = fitz.open()
     page = doc.new_page()
     page.insert_text((50, 50), "Conteudo de teste do PDF em Portugues.")
     doc.save(filepath)
     doc.close()
-    
+
     extractor = PdfExtractor()
     texto = extractor.extract(filepath)
-    
+
     assert "Conteudo de teste" in texto
 
 
 def test_docx_extractor(temp_dirs):
     """Valida a extracao de DOCX gerando um documento Word valido."""
     filepath = os.path.join(temp_dirs['origem'], "teste.docx")
-    
+
     doc = Document()
     doc.add_paragraph("Parágrafo de teste do Word.")
     # Adiciona tabela
     table = doc.add_table(rows=1, cols=1)
     table.cell(0, 0).text = "Texto na tabela do Word"
     doc.save(filepath)
-    
+
     extractor = DocxExtractor()
     texto = extractor.extract(filepath)
-    
+
     assert "Parágrafo de teste" in texto
     assert "Texto na tabela" in texto
 
@@ -130,17 +138,17 @@ def test_docx_extractor(temp_dirs):
 def test_xlsx_extractor(temp_dirs):
     """Valida a extracao de XLSX gerando uma planilha Excel valida."""
     filepath = os.path.join(temp_dirs['origem'], "teste.xlsx")
-    
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws['A1'] = "Item de teste Excel"
     ws['B2'] = 12345
     wb.save(filepath)
     wb.close()
-    
+
     extractor = XlsxExtractor()
     texto = extractor.extract(filepath)
-    
+
     assert "Item de teste" in texto
     assert "12345" in texto
 
@@ -148,17 +156,17 @@ def test_xlsx_extractor(temp_dirs):
 def test_pptx_extractor(temp_dirs):
     """Valida a extracao de PPTX gerando uma apresentacao PowerPoint valida."""
     filepath = os.path.join(temp_dirs['origem'], "teste.pptx")
-    
+
     prs = Presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])  # Layout em branco
     tx_box = slide.shapes.add_textbox(100, 100, 200, 100)
     tf = tx_box.text_frame
     tf.text = "Texto de teste do slide PowerPoint"
     prs.save(filepath)
-    
+
     extractor = PptxExtractor()
     texto = extractor.extract(filepath)
-    
+
     assert "Texto de teste" in texto
 
 
@@ -167,10 +175,10 @@ def test_rtf_extractor(temp_dirs):
     filepath = os.path.join(temp_dirs['origem'], "teste.rtf")
     with open(filepath, "w", encoding="ascii") as f:
         f.write(r"{\rtf1\ansi\deff0 {\fonttbl {\f0 Courier;}}\f0\fs24 Texto limpo RTF.}")
-        
+
     extractor = RtfExtractor()
     texto = extractor.extract(filepath)
-    
+
     assert "Texto limpo RTF" in texto
 
 
@@ -179,12 +187,12 @@ def test_odf_extractors(temp_dirs):
     odt_path = os.path.join(temp_dirs['origem'], "teste.odt")
     ods_path = os.path.join(temp_dirs['origem'], "teste.ods")
     odp_path = os.path.join(temp_dirs['origem'], "teste.odp")
-    
+
     # 1. ODT
     odt = OpenDocumentText()
     odt.text.addElement(P(text="Conteudo ODT OpenOffice"))
     odt.save(odt_path)
-    
+
     # 2. ODS
     ods = OpenDocumentSpreadsheet()
     table = Table(name="Planilha1")
@@ -195,7 +203,7 @@ def test_odf_extractors(temp_dirs):
     table.addElement(row)
     ods.spreadsheet.addElement(table)
     ods.save(ods_path)
-    
+
     # 3. ODP
     odp = OpenDocumentPresentation()
     # Adiciona elemento em Page e depois na presentation
@@ -208,7 +216,7 @@ def test_odf_extractors(temp_dirs):
     page.addElement(frame)
     odp.presentation.addElement(page)
     odp.save(odp_path)
-    
+
     assert "ODT" in OdtExtractor().extract(odt_path)
     assert "Celula ODS" in OdsExtractor().extract(ods_path)
     assert "Texto ODP" in OdpExtractor().extract(odp_path)
@@ -217,14 +225,14 @@ def test_odf_extractors(temp_dirs):
 def test_mac_extractor(temp_dirs):
     """Valida o MacExtractor simulando um arquivo zip Pages do iWork contendo binario .iwork."""
     filepath = os.path.join(temp_dirs['origem'], "doc.pages")
-    
+
     # Cria zip simulado contendo o binario Index/Document.iwork
     with zipfile.ZipFile(filepath, 'w') as zf:
         zf.writestr('Index/Document.iwork', b'\x00\x01\x03\x02Texto de Teste do Mac Pages\x00\x00')
-        
+
     extractor = MacExtractor()
     texto = extractor.extract(filepath)
-    
+
     assert "Texto de Teste do Mac Pages" in texto
 
 # =====================================================================
@@ -237,13 +245,13 @@ def test_extract_worker_success(temp_dirs):
     f1 = os.path.join(temp_dirs['origem'], "doc1.txt")
     with open(f1, "w", encoding="utf-8") as f:
         f.write("Conteudo semantico de teste")
-        
+
     # Insere na fila
     conn = sqlite3.connect(temp_dirs['db_path'])
     try:
         conn.execute(
             """
-            INSERT INTO arquivos_processamento 
+            INSERT INTO arquivos_processamento
             (uuid, caminho_origem, nome_original, tamanho_bytes, hash_xxhash, status, eh_duplicado)
             VALUES ('uuid-ok', ?, 'doc1.txt', 10, 'hash1', 'pendente_extracao', 0)
             """,
@@ -252,12 +260,12 @@ def test_extract_worker_success(temp_dirs):
         conn.commit()
     finally:
         conn.close()
-        
+
     worker = ExtractWorker(temp_dirs['db_path'], str(temp_dirs['destino']))
     total = worker.execute()
-    
+
     assert total == 1
-    
+
     # Valida no banco
     conn = sqlite3.connect(temp_dirs['db_path'])
     try:
@@ -277,12 +285,12 @@ def test_extract_worker_unsupported_format(temp_dirs):
     f1 = os.path.join(temp_dirs['origem'], "programa.exe")
     with open(f1, "wb") as f:
         f.write(b"\x90\x00\x00\x00")
-        
+
     conn = sqlite3.connect(temp_dirs['db_path'])
     try:
         conn.execute(
             """
-            INSERT INTO arquivos_processamento 
+            INSERT INTO arquivos_processamento
             (uuid, caminho_origem, nome_original, tamanho_bytes, hash_xxhash, status, eh_duplicado)
             VALUES ('uuid-exe', ?, 'programa.exe', 4, 'hash2', 'pendente_extracao', 0)
             """,
@@ -291,12 +299,12 @@ def test_extract_worker_unsupported_format(temp_dirs):
         conn.commit()
     finally:
         conn.close()
-        
+
     worker = ExtractWorker(temp_dirs['db_path'], str(temp_dirs['destino']))
     total = worker.execute()
-    
+
     assert total == 1
-    
+
     conn = sqlite3.connect(temp_dirs['db_path'])
     try:
         cursor = conn.cursor()
@@ -316,12 +324,12 @@ def test_extract_worker_quarantine_flow(temp_dirs):
     f1 = os.path.join(temp_dirs['origem'], "corrompido.pdf")
     with open(f1, "w", encoding="utf-8") as f:
         f.write("dados invalidos pdf")
-        
+
     conn = sqlite3.connect(temp_dirs['db_path'])
     try:
         conn.execute(
             """
-            INSERT INTO arquivos_processamento 
+            INSERT INTO arquivos_processamento
             (uuid, caminho_origem, nome_original, tamanho_bytes, hash_xxhash, status, eh_duplicado)
             VALUES ('uuid-corrompido', ?, 'corrompido.pdf', 20, 'hash3', 'pendente_extracao', 0)
             """,
@@ -330,33 +338,33 @@ def test_extract_worker_quarantine_flow(temp_dirs):
         conn.commit()
     finally:
         conn.close()
-        
+
     worker = ExtractWorker(temp_dirs['db_path'], str(temp_dirs['destino']))
     total = worker.execute()
-    
+
     assert total == 1
-    
+
     # 1. Valida se o arquivo original foi movido/removido da origem
     assert not os.path.exists(f1)
-    
+
     # 2. Valida se a quarentena fisica foi criada no destino preservando o caminho do drive absoluto (Opcao B)
     drive, resto = os.path.splitdrive(f1)
     drive_limpo = drive.replace(":", "_").strip("\\/")
     resto_limpo = resto.lstrip("\\/")
-    
+
     caminho_quarentena_esperado = os.path.join(
-        temp_dirs['destino'], 
-        "_QUARENTENA_", 
-        drive_limpo, 
+        temp_dirs['destino'],
+        "_QUARENTENA_",
+        drive_limpo,
         resto_limpo
     )
-    
+
     caminho_verificar_exists = caminho_quarentena_esperado
     if os.name == 'nt' and len(caminho_quarentena_esperado) > 240:
         caminho_verificar_exists = "\\\\?\\" + os.path.abspath(caminho_quarentena_esperado)
-        
+
     assert os.path.exists(caminho_verificar_exists)
-    
+
     # 3. Valida no banco se o status mudou para 'quarentena', o caminho_origem atualizou para a quarentena e gravou o motivo
     conn = sqlite3.connect(temp_dirs['db_path'])
     try:

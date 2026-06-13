@@ -41,3 +41,28 @@ interface_laravel/.env
 *.log
 tmp/
 temp/
+
+# Arquivos de debug e saídas de ferramentas de análise (gerados durante dev)
+bandit_*.txt
+bandit_*.log
+pytest_*.txt
+pytest_*.log
+find_python_results.txt
+debug_ps.txt
+test_results.log
+linter_tests_results.log
+
+# PHP portável (binários)
+php/
+
+# Deploy: conteúdo gerado (apenas a estrutura/README são versionados)
+deploy/producao/motor_python/**
+deploy/producao/interface_laravel/**
+deploy/producao/banco_dados/**
+deploy/producao/docs/**
+deploy/producao/php/**
+!deploy/producao/**/.gitkeep
+
+# Arquivos temporários de depuração
+stderr.txt
+stdout.txt

@@ -93,7 +93,7 @@ class Quarentena extends Page implements HasTable
                     ->requiresConfirmation()
                     ->modalHeading('Confirmar Descarte de Arquivo')
                     ->modalDescription('Você tem certeza que deseja descartar este arquivo? Ele será marcado para exclusão física definitiva pelo motor Python.')
-                    ->modalSubmitButtonLabel('Sim, Descartar')
+                    ->modalSubmitActionLabel('Sim, Descartar')
                     ->action(function (ArquivoProcessamento $record) {
                         $record->update([
                             'status' => 'descarte_pendente',

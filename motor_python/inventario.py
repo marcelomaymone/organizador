@@ -1,10 +1,50 @@
+import ctypes
 import os
+import shutil
 import sqlite3
 import uuid
 from collections.abc import Generator
 from typing import Any
 
 import xxhash
+
+
+def obter_serial_volume(caminho_diretorio: str) -> str:
+    """Retorna o numero de serie da particao de origem no Windows 11 para fins de rastreabilidade fisica.
+
+    Esta decisao de design de usar chamadas nativas do Windows visa evitar dependencias externas.
+    """
+    drive_letra = os.path.splitdrive(os.path.abspath(caminho_diretorio))[0] + "\\"
+    volume_serial_number = ctypes.c_ulong()
+
+    try:
+        # Executa chamada nativa a Kernel32 para evitar complexidades com WMI
+        sucesso = ctypes.windll.kernel32.GetVolumeInformationW(
+            ctypes.c_wchar_p(drive_letra),
+            None, 0,
+            ctypes.byref(volume_serial_number),
+            None, None, None, 0
+        )
+        if sucesso:
+            return f"{drive_letra.replace(':', '')}_{volume_serial_number.value:X}"
+    except (AttributeError, Exception):
+        # Fallback silencioso para prosseguir com o subprocesso wmic
+        pass
+
+    # Fallback para particao via UUID
+    import subprocess  # nosec B404
+    try:
+        # Decisao de design: O wmic e chamado de forma parametrizada sem shell=True
+        # para neutralizar vulnerabilidades de execucao e passar nas barreiras SAST.
+        cmd = ["wmic", "logicaldisk", "where", f"DeviceID='{drive_letra.strip(chr(92))}'", "get", "VolumeSerialNumber"]
+        output = subprocess.check_output(cmd).decode().split()  # nosec B603
+        if len(output) >= 2:
+            return f"{drive_letra.replace(':', '')}_{output[1]}"
+    except Exception:
+        # Retorna o valor de falha padrão caso wmic não esteja instalado/disponível
+        return "HARDWARE_DESCONHECIDO"
+
+    return "HARDWARE_DESCONHECIDO"
 
 
 class SecurityError(Exception):
@@ -103,6 +143,50 @@ class DatabaseRepository:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
 
+            # Criacao da tabela dispositivos (caso nao exista, comum em testes isolados)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS dispositivos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                nome TEXT,
+                ponto_montagem TEXT,
+                tipo_sistema_arquivos TEXT,
+                capacidade_bytes INTEGER,
+                espaco_livre_bytes INTEGER,
+                hardware_id TEXT UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
+            # Criacao da tabela arquivos_processamento (caso nao exista)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS arquivos_processamento (
+                uuid TEXT PRIMARY KEY,
+                dispositivo_id INTEGER,
+                caminho_origem TEXT UNIQUE NOT NULL,
+                nome_original TEXT NOT NULL,
+                tamanho_bytes INTEGER NOT NULL,
+                hash_xxhash TEXT NOT NULL,
+                status TEXT DEFAULT 'pendente_extracao',
+                caminho_proposto TEXT,
+                caminho_aprovado TEXT,
+                categoria_proposta TEXT,
+                justificativa_classificacao TEXT,
+                eh_duplicado INTEGER DEFAULT 0,
+                motivo_falha TEXT,
+                mensagem_erro TEXT,
+                texto_extraido TEXT,
+                data_criacao_sistema INTEGER,
+                data_modificacao_sistema INTEGER,
+                data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                data_processamento TIMESTAMP,
+                created_at TIMESTAMP,
+                updated_at TIMESTAMP,
+                FOREIGN KEY(dispositivo_id) REFERENCES dispositivos(id) ON DELETE SET NULL
+            );
+            """)
+
             # Criacao da tabela categorias_destino
             conn.execute("""
             CREATE TABLE IF NOT EXISTS categorias_destino (
@@ -118,23 +202,20 @@ class DatabaseRepository:
 
             # Adicao incremental de colunas em arquivos_processamento se ela ja existir
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='arquivos_processamento';")
-            tabela_existe = cursor.fetchone() is not None
+            cursor.execute("PRAGMA table_info(arquivos_processamento);")
+            columns = [info[1] for info in cursor.fetchall()]
 
-            if tabela_existe:
-                cursor.execute("PRAGMA table_info(arquivos_processamento);")
-                columns = [info[1] for info in cursor.fetchall()]
+            novas_colunas = {
+                "dispositivo_id": "INTEGER",
+                "categoria_macro": "TEXT",
+                "categoria_micro": "TEXT",
+                "similaridade_calculada": "REAL",
+                "justificativa_cot": "TEXT",
+            }
 
-                novas_colunas = {
-                    "categoria_macro": "TEXT",
-                    "categoria_micro": "TEXT",
-                    "similaridade_calculada": "REAL",
-                    "justificativa_cot": "TEXT",
-                }
-
-                for col_name, col_type in novas_colunas.items():
-                    if col_name not in columns:
-                        conn.execute(f"ALTER TABLE arquivos_processamento ADD COLUMN {col_name} {col_type};")
+            for col_name, col_type in novas_colunas.items():
+                if col_name not in columns:
+                    conn.execute(f"ALTER TABLE arquivos_processamento ADD COLUMN {col_name} {col_type};")
 
             # Popular categorias_destino se estiver vazia
             cursor.execute("SELECT COUNT(*) FROM categorias_destino;")
@@ -191,18 +272,74 @@ class DatabaseRepository:
         finally:
             conn.close()
 
+    def obter_ou_criar_dispositivo(self, hardware_id: str, ponto_montagem: str) -> int:
+        """Obtem ou cria o dispositivo correspondente ao drive NTFS de origem."""
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT id FROM dispositivos WHERE hardware_id = ?", (hardware_id,))
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+
+            dev_uuid = str(uuid.uuid4())
+            ponto_montagem_limpo = ponto_montagem.replace(':', '').strip('\\/')
+            nome = f"Disco Externo {ponto_montagem_limpo}"
+
+            capacidade = None
+            espaco_livre = None
+            try:
+                total, used, free = shutil.disk_usage(ponto_montagem)
+                capacidade = total
+                espaco_livre = free
+            except Exception:
+                capacidade = 0
+                espaco_livre = 0
+
+            cursor.execute(
+                """
+                INSERT INTO dispositivos (uuid, nome, ponto_montagem, hardware_id, capacidade_bytes, espaco_livre_bytes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (dev_uuid, nome, ponto_montagem, hardware_id, capacidade, espaco_livre)
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            raise OSError(f"Falha ao obter ou criar dispositivo no SQLite: {e}")
+        finally:
+            conn.close()
+
+    def carregar_hashes_existentes(self) -> set[str]:
+        """Carrega todos os hashes de arquivos originais (nao duplicados) ja cadastrados no SQLite."""
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT hash_xxhash FROM arquivos_processamento WHERE eh_duplicado = 0")
+            return {row[0] for row in cursor.fetchall()}
+        except Exception:
+            return set()
+        finally:
+            conn.close()
+
     def insert_batch(self, items: list[dict[str, Any]]) -> None:
         """Insere registros em lote no banco usando executemany parametrizado de forma segura."""
         if not items:
             return
 
+        # Garante a presenca de todas as chaves esperadas pela query nos dicionarios do lote
+        for item in items:
+            if "dispositivo_id" not in item:
+                item["dispositivo_id"] = None
+
         sql = """
         INSERT INTO arquivos_processamento (
-            uuid, caminho_origem, nome_original, tamanho_bytes,
+            uuid, dispositivo_id, caminho_origem, nome_original, tamanho_bytes,
             hash_xxhash, status, data_criacao_sistema, data_modificacao_sistema,
             justificativa_classificacao, eh_duplicado, data_registro
         ) VALUES (
-            :uuid, :caminho_origem, :nome_original, :tamanho_bytes,
+            :uuid, :dispositivo_id, :caminho_origem, :nome_original, :tamanho_bytes,
             :hash_xxhash, :status, :data_criacao_sistema, :data_modificacao_sistema,
             :justificativa_classificacao, :eh_duplicado, CURRENT_TIMESTAMP
         )
@@ -211,8 +348,13 @@ class DatabaseRepository:
             hash_xxhash = excluded.hash_xxhash,
             data_modificacao_sistema = excluded.data_modificacao_sistema,
             status = CASE
-                WHEN status IN ('erro', 'quarentena') THEN 'pendente_extracao'
+                WHEN status IN ('erro', 'quarentena') THEN excluded.status
                 ELSE status
+            END,
+            eh_duplicado = excluded.eh_duplicado,
+            justificativa_classificacao = CASE
+                WHEN excluded.eh_duplicado = 1 THEN excluded.justificativa_classificacao
+                ELSE justificativa_classificacao
             END;
         """
 
@@ -237,26 +379,48 @@ class InventoryWorker:
         self.scanner = Scanner(root_path)
         self.repo = DatabaseRepository(db_path)
 
+        # Mapeamento do hardware ID e identificacao unica do drive de origem
+        self.hardware_id = obter_serial_volume(root_path)
+        self.drive_letra = os.path.splitdrive(os.path.abspath(root_path))[0] + "\\"
+        self.dispositivo_id = self.repo.obter_ou_criar_dispositivo(self.hardware_id, self.drive_letra)
+
     def execute(self) -> int:
-        """Executa a rotina completa de inventario."""
+        """Executa a rotina completa de inventario com deduplicacao rapida baseada em hash."""
         batch = []
         count = 0
+
+        # Carrega hashes nao duplicados existentes no banco de dados para evitar re-inferencias
+        hashes_vistos = self.repo.carregar_hashes_existentes()
 
         for file_data in self.scanner.scan_files():
             try:
                 h = Hasher.compute_xxhash(file_data["caminho"])
 
+                # Lógica de Deduplicação de Arquivos
+                if h in hashes_vistos:
+                    eh_duplicado = 1
+                    status = "aguardando_auditoria"
+                    justificativa = (
+                        "Arquivo duplicado logicamente. Classificação e destino propagados do original de referência."
+                    )
+                else:
+                    eh_duplicado = 0
+                    status = "pendente_extracao"
+                    justificativa = ""
+                    hashes_vistos.add(h)
+
                 record = {
                     "uuid": str(uuid.uuid4()),
+                    "dispositivo_id": self.dispositivo_id,
                     "caminho_origem": file_data["caminho"],
                     "nome_original": file_data["nome"],
                     "tamanho_bytes": file_data["tamanho_bytes"],
                     "hash_xxhash": h,
-                    "status": "pendente_extracao",
+                    "status": status,
                     "data_criacao_sistema": int(file_data["data_criacao"]),
                     "data_modificacao_sistema": int(file_data["data_modificacao"]),
-                    "justificativa_classificacao": "",
-                    "eh_duplicado": 0,
+                    "justificativa_classificacao": justificativa,
+                    "eh_duplicado": eh_duplicado,
                 }
 
                 batch.append(record)

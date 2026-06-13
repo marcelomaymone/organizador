@@ -1,7 +1,8 @@
-import os
 import sqlite3
+
 import pytest
-from inventario import Scanner, Hasher, DatabaseRepository, InventoryWorker, SecurityError
+
+from inventario import DatabaseRepository, Hasher, InventoryWorker, Scanner, SecurityError
 
 # Usamos fixture do pytest para criar caminhos e ambientes isolados para os testes,
 # garantindo que o estado do banco e dos arquivos nao vaze entre execucoes (SOLID - Principio de Responsabilidade Unica).
@@ -23,7 +24,7 @@ def test_scanner_prohibited_paths():
     # Testamos a raiz C:\ que e proibida
     with pytest.raises(SecurityError):
         Scanner("C:\\")
-        
+
     with pytest.raises(SecurityError):
         Scanner("C:")
 
@@ -37,19 +38,19 @@ def test_scanner_scan_files(temp_dir):
     # Criamos alguns arquivos de teste dentro da pasta temporaria permitida
     file1 = temp_dir / "arquivo1.txt"
     file1.write_text("Conteudo do primeiro arquivo de teste.")
-    
+
     file2 = temp_dir / "arquivo2.txt"
     file2.write_text("Outro conteudo.")
-    
+
     # Criamos subdiretorios
     subdir = temp_dir / "subdir"
     subdir.mkdir()
     file3 = subdir / "arquivo3.txt"
     file3.write_text("Conteudo do subdiretorio.")
-    
+
     scanner = Scanner(str(temp_dir))
     files = list(scanner.scan_files())
-    
+
     # Devem ser encontrados 3 arquivos
     assert len(files) == 3
     caminhos = [f['caminho'] for f in files]
@@ -61,11 +62,11 @@ def test_hasher_compute_xxhash(temp_dir):
     """Verifica se o Hasher computa o hash xxhash corretamente usando blocos de leitura."""
     test_file = temp_dir / "hash_test.dat"
     test_file.write_bytes(b"hello world")
-    
+
     # O hash xxhash xxh64 esperado para 'hello world' e 45ab6734b21e6968
     expected_hash = "45ab6734b21e6968"
     actual_hash = Hasher.compute_xxhash(str(test_file))
-    
+
     assert actual_hash == expected_hash
 
 def test_database_repository_insert_and_conflict(temp_db):
@@ -98,7 +99,7 @@ def test_database_repository_insert_and_conflict(temp_db):
         conn.close()
 
     repo = DatabaseRepository(temp_db)
-    
+
     # Dados de teste
     item = {
         'uuid': 'uuid-1',
@@ -112,9 +113,9 @@ def test_database_repository_insert_and_conflict(temp_db):
         'justificativa_classificacao': '',
         'eh_duplicado': 0
     }
-    
+
     repo.insert_batch([item])
-    
+
     # Verifica insercao
     conn = sqlite3.connect(temp_db)
     try:
@@ -126,14 +127,14 @@ def test_database_repository_insert_and_conflict(temp_db):
         assert row[2] == 'pendente_extracao'
     finally:
         conn.close()
-        
+
     # Testa conflito (ON CONFLICT DO UPDATE)
     item_modificado = item.copy()
     item_modificado['tamanho_bytes'] = 200
     item_modificado['status'] = 'erro'  # Deve reverter para pendente_extracao no ON CONFLICT
-    
+
     repo.insert_batch([item_modificado])
-    
+
     conn = sqlite3.connect(temp_db)
     try:
         cursor = conn.cursor()
@@ -175,12 +176,12 @@ def test_inventory_worker_execution(temp_dir, temp_db):
     # Criamos arquivos para escanear
     file1 = temp_dir / "teste_worker.txt"
     file1.write_text("conteudo para o worker")
-    
+
     worker = InventoryWorker(str(temp_dir), temp_db)
     total = worker.execute()
-    
+
     assert total == 1
-    
+
     # Verifica se o registro esta persistido no banco
     conn = sqlite3.connect(temp_db)
     try:
