@@ -62,8 +62,8 @@ def test_hasher_compute_xxhash(temp_dir):
     test_file = temp_dir / "hash_test.dat"
     test_file.write_bytes(b"hello world")
     
-    # O hash xxhash xxh64 esperado para 'hello world' e d2474e86ae95e95a
-    expected_hash = "d2474e86ae95e95a"
+    # O hash xxhash xxh64 esperado para 'hello world' e 45ab6734b21e6968
+    expected_hash = "45ab6734b21e6968"
     actual_hash = Hasher.compute_xxhash(str(test_file))
     
     assert actual_hash == expected_hash
@@ -87,6 +87,9 @@ def test_database_repository_insert_and_conflict(temp_db):
             data_modificacao_sistema INTEGER,
             justificativa_classificacao TEXT,
             eh_duplicado INTEGER,
+            motivo_falha TEXT,
+            mensagem_erro TEXT,
+            texto_extraido TEXT,
             data_registro TEXT
         );
         """)
@@ -159,6 +162,9 @@ def test_inventory_worker_execution(temp_dir, temp_db):
             data_modificacao_sistema INTEGER,
             justificativa_classificacao TEXT,
             eh_duplicado INTEGER,
+            motivo_falha TEXT,
+            mensagem_erro TEXT,
+            texto_extraido TEXT,
             data_registro TEXT
         );
         """)
