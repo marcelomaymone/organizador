@@ -124,7 +124,7 @@ rem o caminho do PHP portavel contem espacos (bug conhecido no Windows).
 rem Solucao: PHP built-in server (-S) com router explicito, que resolve o caminho
 rem corretamente independente de espacos no diretorio.
 cd /d "%LARAVEL_DIR%"
-"%PHP_CMD%" -S 127.0.0.1:8000 -t public public/index.php
+"%PHP_CMD%" -S 127.0.0.1:8000 -t public server.php
 exit /b %errorlevel%
 
 :help
