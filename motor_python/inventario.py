@@ -90,8 +90,13 @@ class Scanner:
                     for entry in it:
                         try:
                             if entry.is_dir(follow_symlinks=False):
-                                # Evita entrar em pastas ocultas do sistema ou recursivas de lixeira
-                                if not entry.name.startswith("$") and entry.name != "System Volume Information":
+                                # Evita entrar em pastas ocultas, de sistema ou as pastas de saída organizada/descarte
+                                if (
+                                    not entry.name.startswith("$") 
+                                    and entry.name != "System Volume Information"
+                                    and entry.name.upper() != "ORGANIZADO"
+                                    and entry.name.upper() != "_TRASH_"
+                                ):
                                     dirs_to_visit.append(entry.path)
                             elif entry.is_file(follow_symlinks=False):
                                 stat = entry.stat()

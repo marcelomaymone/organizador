@@ -1,0 +1,23 @@
+# Checklist de Tarefas - Aperfeiçoamento Estético e Funcional
+
+- `[x]` 1. Estilização Visual e Logo Animado
+  - `[x]` Criar folha de estilo `custom_theme.css` com temas marinho/celeste/solar, transparências e degradês.
+  - `[x]` Criar componente do logo minimalista e animado `brand-logo.blade.php`.
+  - `[x]` Injetar CSS e logo no `AdminPanelProvider.php`.
+- `[x]` 2. Seletor de Pastas Local (Folder Picker)
+  - `[x]` Criar componente Livewire `FolderPicker.php` para navegação local de diretórios.
+  - `[x]` Criar view Blade `folder-picker.blade.php` para o modal do File Explorer.
+  - `[x]` Integrar o `FolderPicker` nos inputs de Origem e Destino na página de `Configuracoes.php`.
+- `[x]` 3. Tratamento de Origem Igual ao Destino
+  - `[x]` Atualizar o `Scanner` no `inventario.py` para ignorar a pasta `Organizado/` no escaneamento.
+  - `[x]` Atualizar o `MovementWorker` no `movement_worker.py` para isolar a saída em `Organizado/` se origem = destino.
+- `[x]` 4. Inicialização Silenciosa e Abertura Automática
+  - `[x]` Atualizar o `start.bat` para rodar PHP e Python ocultos via PowerShell e abrir o navegador automaticamente.
+- `[x]` 5. Botão de Encerramento Completo da Aplicação
+  - `[x]` Criar ação de encerramento (`DesligarAction`) no Filament.
+  - `[x]` Adicionar botão/atalho no cabeçalho ou menu lateral para desligar o app e fechar a aba do browser.
+- `[x]` 6. Limpeza, Sincronização e Deploy Final
+  - `[x]` Rodar testes completos de integração.
+  - `[x]` Limpar arquivos temporários, órfãos e de testes.
+  - `[x]` Copiar todos os arquivos para a pasta portátil de produção no Desktop.
+  - `[x]` Realizar o commit final no GitHub com a mensagem especificada.

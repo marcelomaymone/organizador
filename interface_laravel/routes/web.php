@@ -36,3 +36,28 @@ Route::post('/admin/duplicados/{uuid}/reclassificar', function (Request $request
     return response()->json(['success' => true]);
 })->name('admin.duplicados.reclassificar');
 
+Route::get('/admin/desligar', function () {
+    // DECISÃO ARQUITETURAL:
+    // Limpar os caches antes do desligamento garante que, quando a pasta portátil
+    // for movida ou distribuída, não existam caminhos físicos absolutos cacheados
+    // que possam quebrar a próxima execução em outro diretório.
+    try {
+        \Illuminate\Support\Facades\Artisan::call('config:clear');
+        \Illuminate\Support\Facades\Artisan::call('cache:clear');
+        \Illuminate\Support\Facades\Artisan::call('route:clear');
+    } catch (\Exception $e) {
+        // Silencia falhas no modo portátil
+    }
+
+    // Executa o comando de encerramento em background com atraso de 2 segundos no Windows.
+    // Isso dá tempo para o servidor PHP enviar a resposta HTML de despedida antes de encerrar
+    // seu próprio processo e o processo do motor Python de forma limpa.
+    if (substr(php_uname(), 0, 7) == "Windows") {
+        pclose(popen('start /B cmd /c "timeout /t 2 >nul && taskkill /F /IM motor_organizador.exe && taskkill /F /IM php.exe"', 'r'));
+    } else {
+        exec('sleep 2 && killall php > /dev/null &');
+    }
+
+    return view('desligar');
+})->name('desligar-app');
+

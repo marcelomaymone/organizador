@@ -97,12 +97,9 @@ exit /b %errorlevel%
 
 :run_app
 echo ====================================================
-echo        Organizador Pro - Execucao Integrada
+echo        Organizador Pro - Inicializacao Silenciosa
 echo ====================================================
-echo [+] Raiz do pacote: %RAIZ_DIR%
-echo [+] PHP utilizado : %PHP_CMD%
-echo [+] Motor Python  : %RUN_CMD%
-echo ====================================================
+echo [+] Iniciando servicos em background (modo invisivel)...
 
 if not exist "%LARAVEL_DIR%" (
     echo [ERR] Pasta interface_laravel nao encontrada em: %LARAVEL_DIR%
@@ -114,18 +111,20 @@ if not exist "%LARAVEL_DIR%\vendor" (
     exit /b 1
 )
 
-echo [+] Iniciando Motor Workers em background...
-start "Organizador Pro - Motor" /min /d "%RAIZ_DIR%" cmd /c "motor_loop.bat"
+rem Inicia o motor em background de forma 100% oculta via PowerShell
+powershell -NoProfile -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c motor_loop.bat' -WorkingDirectory '%RAIZ_DIR%' -WindowStyle Hidden"
+echo [+] Motor Workers iniciado silenciosamente.
 
-echo [+] Iniciando painel web Laravel BFF em http://localhost:8000 ...
-echo [+] Pressione Ctrl+C para encerrar o servidor.
-rem NOTA ARQUITETURAL: artisan serve usa proc_open internamente, que falha quando
-rem o caminho do PHP portavel contem espacos (bug conhecido no Windows).
-rem Solucao: PHP built-in server (-S) com router explicito, que resolve o caminho
-rem corretamente independente de espacos no diretorio.
-cd /d "%LARAVEL_DIR%"
-"%PHP_CMD%" -S 127.0.0.1:8000 -t public server.php
-exit /b %errorlevel%
+rem Inicia o Laravel BFF na porta 8000 de forma 100% oculta via PowerShell
+powershell -NoProfile -Command "Start-Process -FilePath '%PHP_CMD%' -ArgumentList '-S 127.0.0.1:8000 -t public server.php' -WorkingDirectory '%LARAVEL_DIR%' -WindowStyle Hidden"
+echo [+] Servidor Laravel BFF iniciado silenciosamente.
+
+echo [+] Abrindo o Painel de Controle no navegador...
+start http://127.0.0.1:8000/admin
+
+echo [+] Pronto! Tudo configurado. Esta janela sera fechada automaticamente.
+timeout /t 2 >nul
+exit /b 0
 
 :help
 echo ====================================================

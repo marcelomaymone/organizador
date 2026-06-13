@@ -1,0 +1,155 @@
+/**
+ * Organizador Pro - Tema Customizado Marinho, Celeste & Solar
+ * 
+ * DECISÃO ARQUITETURAL:
+ * Este CSS é injetado diretamente no Filament v3 para sobrepor o tema padrão do Tailwind.
+ * Oferece uma identidade estética "Premium" baseada em glassmorphism (transparência com desfoque),
+ * gradientes marinho/celeste para imersão e toques dourados/solares para elementos de foco,
+ * comando e alertas, elevando o visual do painel.
+ */
+
+/* ==========================================================================
+   1. Variáveis e Tokens de Design
+   ========================================================================== */
+:root {
+    --color-marinho-deep: #030712;      /* Fundo ultra escuro */
+    --color-marinho-card: #111827;      /* Fundo de cards / sidebar */
+    --color-marinho-border: #1f2937;    /* Borda marinho escura */
+    --color-celeste-glow: #06b6d4;      /* Ciano/Celeste ativo */
+    --color-solar-warm: #f97316;        /* Laranja/Solar quente para ações */
+    --color-solar-gold: #eab308;        /* Dourado para avisos/status */
+}
+
+/* ==========================================================================
+   2. Ajustes Visuais Globais e Fontes
+   ========================================================================== */
+body {
+    background-color: var(--color-marinho-deep) !important;
+    color: #f3f4f6 !important;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Força nitidez nas tabelas e textos do painel */
+.fi-ta-record-title, 
+.fi-ta-text-item,
+.fi-fo-text-input {
+    font-weight: 500 !important;
+    letter-spacing: 0.015em;
+}
+
+/* ==========================================================================
+   3. Efeito de Vidro (Glassmorphism) na Sidebar e Cabeçalho
+   ========================================================================== */
+.fi-sidebar {
+    background-color: rgba(17, 24, 39, 0.85) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-right: 1px solid rgba(31, 41, 55, 0.5) !important;
+}
+
+.fi-topbar {
+    background-color: rgba(3, 7, 18, 0.75) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-bottom: 1px solid rgba(31, 41, 55, 0.3) !important;
+}
+
+/* ==========================================================================
+   4. Gradientes Celeste e Marinho
+   ========================================================================== */
+/* Fundo de cards principais */
+.fi-section, 
+.fi-ta-ctn,
+.fi-wi-widget {
+    background-color: var(--color-marinho-card) !important;
+    border: 1px solid var(--color-marinho-border) !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4) !important;
+    border-radius: 12px !important;
+    transition: all 0.3s ease;
+}
+
+.fi-section:hover,
+.fi-ta-ctn:hover {
+    border-color: rgba(6, 182, 212, 0.3) !important;
+    box-shadow: 0 4px 25px -2px rgba(6, 182, 212, 0.08) !important;
+}
+
+/* ==========================================================================
+   5. Elementos Ativos e Botões Solares / Celestes
+   ========================================================================== */
+/* Itens ativos do menu lateral - Degradê Celeste/Marinho */
+.fi-sidebar-item-active a {
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.15) 0%, rgba(17, 24, 39, 0.2) 100%) !important;
+    border-left: 3px solid var(--color-celeste-glow) !important;
+    color: #ffffff !important;
+}
+
+.fi-sidebar-item-active svg {
+    color: var(--color-celeste-glow) !important;
+    filter: drop-shadow(0 0 5px rgba(6, 182, 212, 0.5));
+}
+
+/* Hover nos itens do menu lateral */
+.fi-sidebar-item:not(.fi-sidebar-item-active) a:hover {
+    background-color: rgba(31, 41, 55, 0.4) !important;
+    color: var(--color-celeste-glow) !important;
+}
+
+/* Customização de Botões Primários - Tons Solares para Destaque */
+button.fi-btn-color-primary,
+.fi-btn[type="submit"] {
+    background: linear-gradient(135deg, var(--color-solar-warm) 0%, #ea580c 100%) !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2) !important;
+    transition: all 0.2s ease-in-out !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+button.fi-btn-color-primary:hover,
+.fi-btn[type="submit"]:hover {
+    background: linear-gradient(135deg, #fb923c 0%, var(--color-solar-warm) 100%) !important;
+    box-shadow: 0 6px 16px rgba(249, 115, 22, 0.35) !important;
+    transform: translateY(-1px);
+}
+
+/* Botões Secundários/Alerta (ex: Iniciar Varredura) - Degradê Celeste */
+button.fi-btn-color-warning {
+    background: linear-gradient(135deg, #0284c7 0%, var(--color-celeste-glow) 100%) !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15) !important;
+    transition: all 0.2s ease-in-out !important;
+    color: #ffffff !important;
+}
+
+button.fi-btn-color-warning:hover {
+    background: linear-gradient(135deg, var(--color-celeste-glow) 0%, #22d3ee 100%) !important;
+    box-shadow: 0 6px 16px rgba(6, 182, 212, 0.3) !important;
+    transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   6. Logo Minimalista Animado
+   ========================================================================== */
+@keyframes pulseGlow {
+    0%, 100% {
+        filter: drop-shadow(0 0 2px rgba(6, 182, 212, 0.4));
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.7));
+        transform: scale(1.05);
+    }
+}
+
+.brand-logo-container svg {
+    animation: pulseGlow 4s infinite ease-in-out;
+}
+
+.brand-logo-text {
+    background: linear-gradient(to right, #ffffff, var(--color-celeste-glow), var(--color-solar-warm));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 850 !important;
+}

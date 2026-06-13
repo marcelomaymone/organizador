@@ -77,6 +77,13 @@ class MovementWorker:
         self.db_path = db_path
         self.destination_path = os.path.abspath(destination_path)
         self.origem_monitorada = os.path.abspath(origem_monitorada) if origem_monitorada else None
+        
+        # DECISÃO ARQUITETURAL:
+        # Se a pasta de destino for idêntica à de origem, redirecionamos para a subpasta 'Organizado'
+        # dentro do diretório para isolar a saída e impedir re-catalogação em loop infinito pelo scanner.
+        if self.origem_monitorada and os.path.normcase(self.destination_path) == os.path.normcase(self.origem_monitorada):
+            self.destination_path = os.path.join(self.destination_path, "Organizado")
+            
         self._init_db()
 
     def _init_db(self) -> None:
